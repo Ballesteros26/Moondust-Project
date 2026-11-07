@@ -1,0 +1,96 @@
+name: Windows Build  
+  
+on:  
+  push:  
+  workflow_dispatch:  
+  
+jobs:  
+  build-win64-release:  
+    runs-on: windows-latest  
+    defaults:  
+      run:  
+        shell: msys2 {0}  
+    steps:  
+      - name: Checkout  
+        uses: actions/checkout@v4  
+        with:  
+          submodules: recursive  
+  
+      - name: Setup MSYS2  
+        uses: msys2/setup-msys2@v2  
+        with:  
+          msystem: UCRT64  
+          update: true  
+          install: git mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-qt5-base mingw-w64-ucrt-x86_64-qt5-svg mingw-w64-ucrt-x86_64-qt5-tools mingw-w64-ucrt-x86_64-qt5-winextras mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-ntldd mingw-w64-ucrt-x86_64-p7zip  
+  
+      - name: Configure CMake Release  
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/build/install"  
+  
+      - name: Build  
+        run: cmake --build build --parallel  
+  
+      - name: Install  
+        run: cmake --install build  
+  
+      - name: Deploy Qt dependencies  
+        run: for exe in build/install/Moondust/*.exe; do windeployqt-qt5 --release --compiler-runtime --no-angle "$exe"; done  
+  
+      - name: Probe remaining DLL dependencies  
+        run: for exe in build/install/Moondust/*.exe; do echo "=== $exe ==="; ntldd -R "$exe" | grep -i "not found" || echo "all resolved"; done  
+  
+      - name: Copy non-Qt DLLs  
+        run: for exe in build/install/Moondust/*.exe; do ntldd -R "$exe" | grep ucrt64 | awk '{print $3}' | sed 's/\\/\//g'; done | sort -u | xargs -I{} cp -f {} build/install/Moondust/  
+  
+      - name: Verify deployed DLLs  
+        run: ls build/install/Moondust/*.dll && for exe in build/install/Moondust/*.exe; do ntldd -R "$exe" | grep -i "not found" && echo "UNRESOLVED in $exe" || true; done  
+  
+      - name: Upload artifact  
+        uses: actions/upload-artifact@v4  
+        with:  
+          name: moondust-project-win64-release  
+          path: build/install/Moondust/  
+  
+  build-win64-debug:  
+    runs-on: windows-latest  
+    defaults:  
+      run:  
+        shell: msys2 {0}  
+    steps:  
+      - name: Checkout  
+        uses: actions/checkout@v4  
+        with:  
+          submodules: recursive  
+  
+      - name: Setup MSYS2  
+        uses: msys2/setup-msys2@v2  
+        with:  
+          msystem: UCRT64  
+          update: true  
+          install: git mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-qt5-base mingw-w64-ucrt-x86_64-qt5-svg mingw-w64-ucrt-x86_64-qt5-tools mingw-w64-ucrt-x86_64-qt5-winextras mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-ntldd mingw-w64-ucrt-x86_64-p7zip  
+  
+      - name: Configure CMake Debug  
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX="$PWD/build/install"  
+  
+      - name: Build  
+        run: cmake --build build --parallel  
+  
+      - name: Install  
+        run: cmake --install build  
+  
+      - name: Deploy Qt dependencies  
+        run: for exe in build/install/Moondust/*.exe; do windeployqt-qt5 --debug --compiler-runtime --no-angle "$exe"; done  
+  
+      - name: Probe remaining DLL dependencies  
+        run: for exe in build/install/Moondust/*.exe; do echo "=== $exe ==="; ntldd -R "$exe" | grep -i "not found" || echo "all resolved"; done  
+  
+      - name: Copy non-Qt DLLs  
+        run: for exe in build/install/Moondust/*.exe; do ntldd -R "$exe" | grep ucrt64 | awk '{print $3}' | sed 's/\\/\//g'; done | sort -u | xargs -I{} cp -f {} build/install/Moondust/  
+  
+      - name: Verify deployed DLLs  
+        run: ls build/install/Moondust/*.dll && for exe in build/install/Moondust/*.exe; do ntldd -R "$exe" | grep -i "not found" && echo "UNRESOLVED in $exe" || true; done  
+  
+      - name: Upload artifact  
+        uses: actions/upload-artifact@v4  
+        with:  
+          name: moondust-project-win64-debug  
+          path: build/install/Moondust/
